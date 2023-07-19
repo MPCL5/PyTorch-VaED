@@ -1,13 +1,18 @@
 import os
 import torch
+import numpy as np
 import torch.nn as nn
+import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader
 from pytorch_model_summary import summary
+import torchvision.transforms as T
 
 from dataset.mnist import MnistDataset
 from model.decoder import Decoder
 from model.encoder import Encoder
 from model.vaed import VaED
+from utils.train_supervisor import TrainSupervisor
+from utils.trainer import Trainer
 
 
 MODEL_NAME = 'VaED'
@@ -42,9 +47,14 @@ def ensure_structure():
 
 
 def get_mnist_loader():
-    train_data = MnistDataset(root='./data/mnist', download=True)
+    img_transform = T.Compose([
+        T.ToTensor(),
+    ])
+
+    train_data = MnistDataset(
+        root='./data/mnist', download=True, transform=img_transform)
     validation_data = MnistDataset(
-        root='./data/mnist', download=True, train=False)
+        root='./data/mnist', download=True, train=False, transform=img_transform)
 
     train_loader = DataLoader(train_data, batch_size=BATCH_SIZE, shuffle=True)
     validation_loader = DataLoader(
@@ -61,6 +71,11 @@ def get_data_loaders(dataset='mnist'):
         case _:
             raise ValueError('Unknown dataset.')
 
+def data_transformer(data):
+    data = data.to(DEVICE)
+    data = data.view(data.shape[0], IMG_SIZE * IMG_SIZE)
+
+    return data
 
 def get_model():
     encoder_net = nn.Sequential(
@@ -72,7 +87,7 @@ def get_model():
         nn.ReLU(),
         nn.Linear(2000, L * 2),
         nn.ReLU(),
-    )
+    ).to(DEVICE)
 
     decoder_net = nn.Sequential(
         nn.Linear(L, 2000),
@@ -83,7 +98,7 @@ def get_model():
         nn.ReLU(),
         nn.Linear(500, IMG_SIZE * IMG_SIZE),
         nn.Sigmoid(),
-    )
+    ).to(DEVICE)
 
     encoder = Encoder(encoder_net).to(DEVICE)
     decoder = Decoder(decoder_net).to(DEVICE)
@@ -98,10 +113,23 @@ def get_model():
     print("\nDECODER:\n", summary(decoder, torch.zeros(
         1, L, device=DEVICE), show_input=False, show_hierarchical=False))
 
+    print("\nVaED:\n", summary(vaed, torch.zeros(
+        1, IMG_SIZE * IMG_SIZE, device=DEVICE), show_input=True, show_hierarchical=True))
+
     return vaed
+
 
 def get_optimizer():
     return torch.optim.Adamax([p for p in model.parameters() if p.requires_grad == True], lr=LR)
+
+
+def plot_curve(name, nll_val):
+    plt.plot(np.arange(len(nll_val)), nll_val, linewidth='3')
+    plt.xlabel('epochs')
+    plt.ylabel('nll')
+    plt.savefig(name + '_nll_val_curve.pdf', bbox_inches='tight')
+    plt.close()
+
 
 if __name__ == '__main__':
     ensure_structure()
@@ -109,4 +137,11 @@ if __name__ == '__main__':
 
     model = get_model()
     optimizer = get_optimizer()
-    
+
+    supervisor = TrainSupervisor(MODEL_NAME, MAX_PATIENCE, RESULT_DIR)
+    trainer = Trainer(supervisor, NUM_EPOCHS, model,
+                      optimizer, train_loader, validation_loader, data_transformer)
+
+    nll_val = trainer.train()
+    print(nll_val)
+    plot_curve(RESULT_DIR + MODEL_NAME, nll_val)

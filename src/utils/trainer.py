@@ -18,19 +18,14 @@ class Trainer:
         self.data_transfer = data_transfer
         self.supervisor = supervisor
 
-    def train(self):
+    def __train_once(self):
         self.model.train()  # put our model in train mode
-        for _, batch in enumerate(self.training_loader):
-            # batch = batch.float()
-            # batch = batch.to(DEVICE)
+        for _, (batch, _) in enumerate(self.training_loader):
             if self.data_transfer:
                 batch = self.data_transfer(batch)
 
-            if hasattr(self.model, 'dequantization'):
-                if self.model.dequantization:
-                    batch = batch + torch.rand(batch.shape)
-
-            loss = self.model.forward(batch)
+            (x_decoded_mean) = self.model.forward(batch)
+            loss = self.model.vae_loss(batch, x_decoded_mean)
 
             self.optimizer.zero_grad()
             loss.backward(retain_graph=True)
@@ -42,7 +37,6 @@ class Trainer:
         N = 0.
 
         for _, test_batch in enumerate(self.val_loader):
-            # test_batch = test_batch.to(DEVICE)
             if self.data_transfer:
                 test_batch = self.data_transfer(test_batch)
 
@@ -58,12 +52,12 @@ class Trainer:
 
         return loss
 
-    def start_training(self):
+    def train(self):
         nll_val = []
         self.supervisor.set_model(self.model)
 
         for e in range(self.num_epochs):
-            self.train()
+            self.__train_once()
             loss_val = self.evaluate(e)
 
             nll_val.append(loss_val)  # save for plotting

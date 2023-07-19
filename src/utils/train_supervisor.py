@@ -18,6 +18,7 @@ class TrainSupervisor:
         torch.save(self.model, self.result_dir + self.model_name + '.model')
         self.num_saves += 1
 
+        # TODO: move this logic to trainer.
         if self.on_save:
             self.on_save(self.model, self.num_saves)
 

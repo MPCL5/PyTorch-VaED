@@ -14,6 +14,7 @@ class VaED(nn.Module):
         self.n_centroid = n_centroid
         self.alpha = alpha
         self.datatype = datatype
+        self.latent_dim = latent_dim
 
         # GMM parameters
         # TODO: check whether if this snippest can be extracted.
@@ -63,5 +64,8 @@ class VaED(nn.Module):
 
         return loss
 
-    def forward(self):
-        pass
+    def forward(self, x):
+        mu_e, log_var_e = self.encoder.encode(x)
+        z = self.encoder.sample(mu_e=mu_e, log_var_e=log_var_e)
+        x_decoded_mean = self.decoder.decode(z)
+        return x_decoded_mean, mu_e, log_var_e

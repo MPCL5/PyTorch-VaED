@@ -24,7 +24,7 @@ class Trainer:
             if self.data_transfer:
                 batch = self.data_transfer(batch)
 
-            (x_decoded_mean) = self.model.forward(batch)
+            (x_decoded_mean, _, _) = self.model.forward(batch)
             loss = self.model.vae_loss(batch, x_decoded_mean)
 
             self.optimizer.zero_grad()
@@ -36,11 +36,12 @@ class Trainer:
         loss = 0.
         N = 0.
 
-        for _, test_batch in enumerate(self.val_loader):
+        for _, (test_batch, _) in enumerate(self.val_loader):
             if self.data_transfer:
                 test_batch = self.data_transfer(test_batch)
 
-            loss_t = self.model.forward(test_batch, reduction='sum')
+            (x_decoded_mean, _, _) = self.model.forward(test_batch)
+            loss_t = self.model.vae_loss(test_batch, x_decoded_mean)
             loss = loss + loss_t.item()
             N = N + test_batch.shape[0]
 

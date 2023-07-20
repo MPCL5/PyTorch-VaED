@@ -2,6 +2,7 @@ import torch
 import numpy as np
 import torch.nn as nn
 from torch.utils.data import DataLoader
+from utils.cluster import cluster_acc
 
 from utils.train_supervisor import TrainSupervisor
 
@@ -35,10 +36,15 @@ class Trainer:
         self.model.eval()
         loss = 0.
         N = 0.
+        acc = 0.
 
-        for _, (test_batch, _) in enumerate(self.val_loader):
+        for _, (test_batch, target) in enumerate(self.val_loader):
             if self.data_transfer:
                 test_batch = self.data_transfer(test_batch)
+
+            gamma = self.model.get_gamma_with_x(test_batch)
+            acc += cluster_acc(torch.argmax(gamma,
+                               dim=1).cpu().numpy(), target.cpu().numpy())
 
             (x_decoded_mean, _, _) = self.model.forward(test_batch)
             loss_t = self.model.vae_loss(test_batch, x_decoded_mean)
@@ -46,10 +52,12 @@ class Trainer:
             N = N + test_batch.shape[0]
 
         loss = loss / N
+        acc = acc / N
 
         print(
-            f'Epoch: {epoch if epoch is not None else "Final"}, val nll={loss}'
+            f'Epoch: {epoch if epoch is not None else "Final"}, val nll={loss}, cluster acc={acc}'
         )
+        # print((self.model.theta_p, self.model.u_p, self.model.lambda_p))
 
         return loss
 

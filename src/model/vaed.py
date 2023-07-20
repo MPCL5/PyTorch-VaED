@@ -24,17 +24,23 @@ class VaED(nn.Module):
 
     def get_gamma(self, z):
         temp_Z = z.unsqueeze(2).repeat(1, 1, self.n_centroid)
-        temp_u_tensor3 = self.u_p.unsqueeze(0).repeat(z.size(0), 1, 1)
+        temp_u_tensor3 = self.u_p.unsqueeze(0).repeat(temp_Z.size(0), 1, 1)
         temp_lambda_tensor3 = self.lambda_p.unsqueeze(
-            0).repeat(z.size(0), 1, 1)
+            0).repeat(temp_Z.size(0), 1, 1)
         temp_theta_tensor3 = self.theta_p.unsqueeze(0).unsqueeze(
-            0).expand(z.size(0), self.latent_dim, self.n_centroid)
+            0).repeat(temp_Z.size(0), temp_Z.size(1), 1)
 
         p_c_z = torch.exp(torch.sum((torch.log(temp_theta_tensor3) - 0.5 * torch.log(2 * torch.pi * temp_lambda_tensor3) -
                                      torch.square(temp_Z - temp_u_tensor3) / (2 * temp_lambda_tensor3)), dim=1)) + 1e-10
 
         gamma = p_c_z / torch.sum(p_c_z, dim=-1, keepdim=True)
         return gamma
+
+    def get_gamma_with_x(self, x):
+        mu_e, log_var_e = self.encoder.encode(x)
+        z = self.encoder.sample(mu_e=mu_e, log_var_e=log_var_e)
+
+        return self.get_gamma(z)
 
     def vae_loss(self, x, x_decoded_mean):
         mu_e, log_var_e = self.encoder.encode(x)
@@ -50,17 +56,17 @@ class VaED(nn.Module):
         if self.datatype == 'sigmoid':
             loss = self.alpha * x.shape[-1] * nn.BCELoss(reduction='sum')(x_decoded_mean, x)\
                 + torch.sum(0.5 * gamma_t * (self.latent_dim * torch.log(torch.tensor(torch.pi * 2)) + torch.log(lambda_tensor3)
-                                             + torch.exp(z_log_var_t) / lambda_tensor3 + torch.square(z_mean_t - u_tensor3) / lambda_tensor3), axis=(1, 2))\
-                - 0.5 * torch.sum(log_var_e+1, axis=-1)\
+                                             + torch.exp(z_log_var_t) / lambda_tensor3 + torch.square(z_mean_t - u_tensor3) / lambda_tensor3), dim=(1, 2))\
+                - 0.5 * torch.sum(log_var_e+1, dim=-1)\
                 - torch.sum(torch.log(self.theta_p.unsqueeze(0).repeat(x.shape[0], 1)) * gamma, dim=-1)\
-                + torch.sum(torch.log(gamma) * gamma, axis=-1)
+                + torch.sum(torch.log(gamma) * gamma, dim=-1)
         else:
             loss = self.alpha * x.shape[-1] * nn.MSELoss(reduction='sum')(x, x_decoded_mean)\
                 + torch.sum(0.5 * gamma_t * (self.latent_dim * torch.log(torch.pi * 2) + torch.log(lambda_tensor3)
-                                             + torch.exp(z_log_var_t) / lambda_tensor3 + torch.square(z_mean_t - u_tensor3) / lambda_tensor3), axis=(1, 2))\
-                - 0.5 * torch.sum(log_var_e+1, axis=-1)\
+                                             + torch.exp(z_log_var_t) / lambda_tensor3 + torch.square(z_mean_t - u_tensor3) / lambda_tensor3), dim=(1, 2))\
+                - 0.5 * torch.sum(log_var_e+1, dim=-1)\
                 - torch.sum(torch.log(self.theta_p.unsqueeze(0).repeat(x.shape[0], 1)) * gamma, dim=-1)\
-                + torch.sum(torch.log(gamma)*gamma, axis=-1)
+                + torch.sum(torch.log(gamma)*gamma, dim=-1)
 
         return loss.mean()
 

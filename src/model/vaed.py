@@ -28,7 +28,7 @@ class VaED(nn.Module):
         temp_lambda_tensor3 = self.lambda_p.unsqueeze(
             0).repeat(temp_Z.size(0), 1, 1)
         temp_theta_tensor3 = self.theta_p.unsqueeze(0).unsqueeze(
-            0).repeat(temp_Z.size(0), temp_Z.size(1), 1)
+            0) * torch.ones((temp_Z.size(0), temp_Z.size(1), self.n_centroid), device=next(self.parameters()).device)
 
         p_c_z = torch.exp(torch.sum((torch.log(temp_theta_tensor3) - 0.5 * torch.log(2 * torch.pi * temp_lambda_tensor3) -
                                      torch.square(temp_Z - temp_u_tensor3) / (2 * temp_lambda_tensor3)), dim=1)) + 1e-10
@@ -47,7 +47,7 @@ class VaED(nn.Module):
         z = self.encoder.sample(mu_e=mu_e, log_var_e=log_var_e)
 
         gamma = self.get_gamma(z)
-        gamma_t = gamma.unsqueeze(2).repeat(1, 1, self.latent_dim)
+        gamma_t = gamma.unsqueeze(1).repeat(1, self.latent_dim, 1)
         z_mean_t = mu_e.unsqueeze(2).repeat(1, 1, self.n_centroid)
         z_log_var_t = log_var_e.unsqueeze(2).repeat(1, 1, self.n_centroid)
         u_tensor3 = self.u_p.unsqueeze(0).repeat(z.size(0), 1, 1)
